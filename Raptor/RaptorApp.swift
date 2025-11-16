@@ -10,23 +10,28 @@ import SwiftData
 
 @main
 struct RaptorApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
-
+    @State private var modelContainer: ModelContainer?
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            if let container = modelContainer {
+                CustomerRootView()
+                    .environment(\.modelContainer, container)
+            } else {
+                ProgressView("Database initialiseren...")
+                    .task {
+                        do {
+                            let container = try await DatabaseService.createSharedContainer()
+                            await MainActor.run {
+                                modelContainer = container
+                            }
+                            // Check CloudKit status
+                            await DatabaseService.checkCloudKitStatus()
+                        } catch {
+                            print("❌ Fatal error: Could not create database container: \(error)")
+                        }
+                    }
+            }
         }
-        .modelContainer(sharedModelContainer)
     }
 }
